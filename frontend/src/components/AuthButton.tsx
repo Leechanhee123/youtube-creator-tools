@@ -8,8 +8,7 @@ import {
   LoginOutlined, 
   LogoutOutlined, 
   UserOutlined, 
-  YoutubeOutlined,
-  SettingOutlined 
+  YoutubeOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -62,7 +61,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({ size = 'middle', style }) => {
       disabled: true,
     },
     {
-      type: 'divider',
+      type: 'divider' as const,
     },
     ...(channels && channels.length > 0 ? [
       {
@@ -81,7 +80,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({ size = 'middle', style }) => {
         disabled: true,
       },
       {
-        type: 'divider',
+        type: 'divider' as const,
       },
     ] : []),
     {
