@@ -1,0 +1,11 @@
+# Railway ignore file - force cache refresh
+__pycache__/
+*.pyc
+.env
+.env.local
+venv/
+node_modules/
+.git/
+frontend/
+tests/
+*.log
