@@ -16,7 +16,6 @@ import {
   Badge,
   List,
   Avatar,
-  Tooltip,
   Divider,
   Modal,
   notification,
@@ -29,7 +28,6 @@ import {
   MessageOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons';
 import type { CommentAnalysisResult, DuplicateGroup } from '../types/api';

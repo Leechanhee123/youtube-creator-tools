@@ -1,4 +1,4 @@
-import { FC } from 'react';
+// import { FC } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider, Layout, theme } from 'antd';
