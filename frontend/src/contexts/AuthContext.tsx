@@ -2,7 +2,8 @@
  * 인증 상태 관리를 위한 React Context
  */
 
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { notification } from 'antd';
 import { authService } from '../services/authService';
 import type { AuthState, AuthContextType, UserInfo, UserChannel, ChannelAccessResponse } from '../types/auth';

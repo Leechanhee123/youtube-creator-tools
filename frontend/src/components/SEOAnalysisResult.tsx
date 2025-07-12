@@ -8,11 +8,9 @@ import {
   Tag,
   Alert,
   List,
-  Progress,
   Divider,
   Collapse,
   Table,
-  Tooltip,
   Badge,
 } from 'antd';
 import {
@@ -20,16 +18,13 @@ import {
   RiseOutlined,
   FallOutlined,
   BulbOutlined,
-  ClockCircleOutlined,
-  FileTextOutlined,
-  TagOutlined,
   EyeOutlined,
   ThunderboltOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons';
 import type { SEOAnalysisData, SEORecommendation } from '../types/api';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { Panel } = Collapse;
 
 interface SEOAnalysisResultProps {

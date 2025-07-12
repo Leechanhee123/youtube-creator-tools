@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
 
   // 분석 결과 처리
   useEffect(() => {
-    if (analysisData) {
+    if (analysisData && analysisData.total_comments !== undefined && analysisData.suspicious_count !== undefined) {
       notification.success({
         message: '댓글 분석 완료',
         description: `총 ${analysisData.total_comments}개 댓글 중 ${analysisData.suspicious_count}개의 의심 댓글을 발견했습니다.`,
@@ -219,8 +219,9 @@ const Dashboard: React.FC = () => {
     setActiveTab('dashboard');
     setAppActiveTab('dashboard');
     // 채널 데이터도 초기화 (타입 호환성을 위해 undefined 사용)
-    updateChannelInfo(undefined as any);
-    updateChannelVideos(undefined as any);
+    // 채널 데이터 초기화
+    // updateChannelInfo(null);
+    // updateChannelVideos([]);
   };
 
   // 경쟁사 분석 핸들러

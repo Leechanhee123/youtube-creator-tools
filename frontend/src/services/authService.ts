@@ -5,13 +5,10 @@
 import axios from 'axios';
 import type {
   AuthURL,
-  TokenRequest,
   TokenResponse,
   UserInfo,
   UserChannel,
   AuthenticatedUser,
-  RefreshTokenRequest,
-  ChannelAccessRequest,
   ChannelAccessResponse
 } from '../types/auth';
 

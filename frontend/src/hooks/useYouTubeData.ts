@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { YouTubeAPI, CommentAPI, ProcessorAPI } from '../services/api';
+import { YouTubeAPI, ProcessorAPI } from '../services/api';
 import type {
   ChannelInfo,
   VideosResponse,
@@ -15,7 +15,7 @@ export const useChannelInfo = () => {
 
   const getChannelInfo = useMutation({
     mutationFn: (request: ChannelInfoRequest) => YouTubeAPI.getChannelInfo(request),
-    onSuccess: (data) => {
+    onSuccess: (data: ChannelInfo) => {
       queryClient.setQueryData(['channel', data.channel_id], data);
     },
   });
@@ -40,7 +40,7 @@ export const useChannelVideos = (channelId: string | null) => {
     queryKey: ['channel-videos', channelId, maxResults, order, pageToken],
     queryFn: () => {
       if (!channelId) throw new Error('Channel ID is required');
-      return YouTubeAPI.getChannelVideos(channelId, maxResults, order, pageToken);
+      return YouTubeAPI.getChannelVideos(channelId);
     },
     enabled: !!channelId,
     staleTime: 5 * 60 * 1000, // 5분
