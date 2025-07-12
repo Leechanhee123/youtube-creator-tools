@@ -14,6 +14,13 @@ class YouTubeDataAPIService:
         self.service_name = settings.YOUTUBE_API_SERVICE_NAME
         self.version = settings.YOUTUBE_API_VERSION
         self._service = None
+        
+        # Debug: API 키 상태 로깅 (보안을 위해 일부만 표시)
+        if self.api_key:
+            masked_key = f"{self.api_key[:10]}...{self.api_key[-4:]}" if len(self.api_key) > 14 else "***"
+            logger.info(f"YouTube API Key loaded: {masked_key}")
+        else:
+            logger.error(f"YouTube API Key not found. Environment variable YOUTUBE_API_KEY = {repr(settings.YOUTUBE_API_KEY)}")
     
     def _get_service(self):
         """YouTube API 서비스 인스턴스를 반환합니다."""
