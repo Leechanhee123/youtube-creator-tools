@@ -211,6 +211,19 @@ async def update_processor_settings(
         logger.error(f"Error updating settings: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@router.post("/analyze", response_model=CommentProcessResponse)
+async def analyze_video_comments_alias(request: CommentProcessRequest):
+    """
+    YouTube 영상의 댓글을 다운로드하고 매크로/스팸 댓글을 분석합니다.
+    (analyze-video의 별칭)
+    
+    - **video_url**: YouTube 영상 URL 또는 비디오 ID
+    - **download_limit**: 다운로드할 댓글 수 (선택사항)
+    - **similarity_threshold**: 유사도 임계값 (0.0~1.0)
+    - **min_duplicate_count**: 중복으로 간주할 최소 개수
+    """
+    return await analyze_video_comments(request)
+
 @router.get("/health")
 async def processor_health_check():
     """Comment Processor 서비스 상태 확인"""

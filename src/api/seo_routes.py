@@ -191,6 +191,17 @@ async def get_channel_seo_summary(channel_id: str):
             detail=f"채널 SEO 요약 조회 중 오류가 발생했습니다: {str(e)}"
         )
 
+@router.post("/analyze", response_model=SEOAnalysisResponse)
+async def analyze_channel_seo_alias(request: SEOAnalysisRequest):
+    """
+    채널의 SEO 분석을 수행합니다. (analyze-channel의 별칭)
+    
+    - **channel_id**: 분석할 YouTube 채널 ID
+    - **percentile_threshold**: 상위/하위 그룹 분리 기준 (기본값: 0.2 = 상위/하위 20%)
+    - **min_videos**: 분석에 필요한 최소 비디오 수 (기본값: 10개)
+    """
+    return await analyze_channel_seo(request)
+
 @router.get("/health")
 async def health_check():
     """SEO 분석 서비스 상태 확인"""

@@ -35,7 +35,7 @@ export class YouTubeAPI {
     const response = await apiClient.post('/api/v1/youtube-data/channel/videos', {
       channel_id: channelId
     });
-    return response.data;
+    return response.data.data;
   }
 }
 
@@ -43,12 +43,12 @@ export class YouTubeAPI {
 export class ProcessorAPI {
   static async analyzeComments(data: VideoAnalysisRequest): Promise<CommentAnalysisResult> {
     const response = await apiClient.post('/api/v1/processor/analyze', data);
-    return response.data.data;
+    return response.data;
   }
 
   static async analyzeVideo(data: VideoAnalysisRequest): Promise<CommentAnalysisResult> {
     const response = await apiClient.post('/api/v1/processor/analyze', data);
-    return response.data.data;
+    return response.data;
   }
 
   static async getSettings(): Promise<any> {

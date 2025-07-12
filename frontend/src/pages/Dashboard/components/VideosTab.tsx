@@ -56,16 +56,9 @@ const VideosTab: React.FC<VideosTabProps> = ({
       width: 150,
       render: (record: VideoInfo) => (
         <div>
-          {record.statistics && (
-            <>
-              <div style={{ fontSize: '12px' }}>
-                <EyeOutlined /> {record.statistics.view_count?.toLocaleString() || 0}
-              </div>
-              <div style={{ fontSize: '12px' }}>
-                <CommentOutlined /> {record.statistics.comment_count?.toLocaleString() || 0}
-              </div>
-            </>
-          )}
+          <div style={{ fontSize: '12px', color: '#999' }}>
+            통계 정보 없음
+          </div>
         </div>
       ),
     },
