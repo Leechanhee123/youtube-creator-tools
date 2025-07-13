@@ -29,10 +29,11 @@ class YouTubeOAuthService:
         self.client_secret = settings.GOOGLE_CLIENT_SECRET
         self.redirect_uri = settings.OAUTH_REDIRECT_URI
         self.scopes = [
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile', 
+            'openid',
             'https://www.googleapis.com/auth/youtube.readonly',
-            'https://www.googleapis.com/auth/youtube.force-ssl',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/userinfo.email'
+            'https://www.googleapis.com/auth/youtube.force-ssl'
         ]
         
         # OAuth 플로우 설정

@@ -9,6 +9,9 @@ import { useChannelInfo, useChannelVideos, useAppState, useCommentAnalysis } fro
 import type { SEOAnalysisData, CompetitorAnalysisData } from '../types/api';
 import { SEOAPI, CompetitorAPI } from '../services/api';
 
+// Components
+import ProtectedRoute from '../components/ProtectedRoute';
+
 // Tab Components
 import DashboardTab from './Dashboard/components/DashboardTab';
 import VideosTab from './Dashboard/components/VideosTab';
@@ -21,7 +24,7 @@ const Dashboard: React.FC = () => {
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [analysisSettings, setAnalysisSettings] = useState({
-    download_limit: undefined as number | undefined,
+    download_limit: 50 as number | undefined, // Render 서버 제한을 위해 기본값 설정
     similarity_threshold: 0.8,
     min_duplicate_count: 3,
   });
@@ -403,14 +406,16 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div>
-      <Tabs 
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={tabItems}
-        size="large"
-      />
-    </div>
+    <ProtectedRoute>
+      <div>
+        <Tabs 
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={tabItems}
+          size="large"
+        />
+      </div>
+    </ProtectedRoute>
   );
 };
 

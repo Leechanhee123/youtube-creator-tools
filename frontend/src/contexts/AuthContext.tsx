@@ -2,7 +2,7 @@
  * 인증 상태 관리를 위한 React Context
  */
 
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { notification } from 'antd';
 import { authService } from '../services/authService';
@@ -109,6 +109,34 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
+  // 토큰 갱신
+  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
+    try {
+      const storedAuth = authService.getStoredAuthData();
+      if (!storedAuth?.refreshToken) {
+        return false;
+      }
+      
+      const tokenResponse = await authService.refreshToken(storedAuth.refreshToken);
+      
+      const expiresAt = new Date(Date.now() + tokenResponse.expires_in * 1000);
+      
+      dispatch({
+        type: 'TOKEN_REFRESH_SUCCESS',
+        payload: {
+          accessToken: tokenResponse.access_token,
+          expiresAt,
+        },
+      });
+      
+      return true;
+      
+    } catch (error) {
+      console.error('토큰 갱신 실패:', error);
+      return false;
+    }
+  }, []);
+
   // 페이지 로드 시 저장된 인증 정보 확인
   useEffect(() => {
     const initializeAuth = async () => {
@@ -153,7 +181,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initializeAuth();
-  }, []);
+  }, [refreshAccessToken]);
 
   // 로그인
   const login = async (): Promise<void> => {
@@ -233,34 +261,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('로그아웃 에러:', error);
       // 로컬 상태는 정리
       dispatch({ type: 'AUTH_LOGOUT' });
-    }
-  };
-
-  // 토큰 갱신
-  const refreshAccessToken = async (): Promise<boolean> => {
-    try {
-      const storedAuth = authService.getStoredAuthData();
-      if (!storedAuth?.refreshToken) {
-        return false;
-      }
-      
-      const tokenResponse = await authService.refreshToken(storedAuth.refreshToken);
-      
-      const expiresAt = new Date(Date.now() + tokenResponse.expires_in * 1000);
-      
-      dispatch({
-        type: 'TOKEN_REFRESH_SUCCESS',
-        payload: {
-          accessToken: tokenResponse.access_token,
-          expiresAt,
-        },
-      });
-      
-      return true;
-      
-    } catch (error) {
-      console.error('토큰 갱신 실패:', error);
-      return false;
     }
   };
 

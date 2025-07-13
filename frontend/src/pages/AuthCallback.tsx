@@ -2,7 +2,7 @@
  * OAuth 콜백 처리 페이지
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Spin, Result, Typography } from 'antd';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,9 +15,17 @@ const AuthCallback: React.FC = () => {
   const { handleAuthCallback, isAuthenticated } = useAuth();
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasProcessed = useRef(false);
 
   useEffect(() => {
     const processCallback = async () => {
+      // 이미 처리했다면 return
+      if (hasProcessed.current) {
+        return;
+      }
+      
+      hasProcessed.current = true;
+      
       try {
         const code = searchParams.get('code');
         const state = searchParams.get('state');
@@ -54,7 +62,7 @@ const AuthCallback: React.FC = () => {
     };
 
     processCallback();
-  }, [searchParams, handleAuthCallback, navigate]);
+  }, []);
 
   // 인증 성공 후 리다이렉트 처리
   useEffect(() => {
