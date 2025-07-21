@@ -205,7 +205,7 @@ class YouTubeDataAPIService:
         
         Args:
             channel_id: 채널 ID
-            max_results: 최대 결과 수 (1-50)
+            max_results: 최대 결과 수 (자동으로 50개씩 페이지네이션 처리)
             order: 정렬 순서 (date, rating, relevance, title, videoCount, viewCount)
         
         Returns:
@@ -229,30 +229,79 @@ class YouTubeDataAPIService:
             
             uploads_playlist_id = channels_response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
             
-            # 플레이리스트에서 비디오 목록 가져오기
-            params = {
-                'part': 'snippet,contentDetails',
-                'playlistId': uploads_playlist_id,
-                'maxResults': max_results
-            }
-            
-            if page_token:
-                params['pageToken'] = page_token
-                
-            playlist_response = service.playlistItems().list(**params).execute()
-            
             videos = []
-            for item in playlist_response.get('items', []):
-                video_info = self._process_video_data(item)
-                videos.append(video_info)
+            video_ids = []
+            all_videos = []
+            current_page_token = page_token
+            videos_fetched = 0
+            
+            # 페이지네이션을 통해 필요한 만큼 비디오 가져오기
+            while videos_fetched < max_results:
+                # 현재 요청에서 가져올 비디오 수 (최대 50개)
+                current_max_results = min(50, max_results - videos_fetched)
+                
+                params = {
+                    'part': 'snippet,contentDetails',
+                    'playlistId': uploads_playlist_id,
+                    'maxResults': current_max_results
+                }
+                
+                if current_page_token:
+                    params['pageToken'] = current_page_token
+                    
+                playlist_response = service.playlistItems().list(**params).execute()
+                items = playlist_response.get('items', [])
+                
+                if not items:
+                    break  # 더 이상 비디오가 없음
+                
+                # 비디오 기본 정보 수집
+                for item in items:
+                    video_info = self._process_video_data(item)
+                    videos.append(video_info)
+                    video_ids.append(video_info['video_id'])
+                
+                videos_fetched += len(items)
+                current_page_token = playlist_response.get('nextPageToken')
+                
+                # 다음 페이지가 없거나 요청된 수만큼 가져왔으면 중단
+                if not current_page_token or videos_fetched >= max_results:
+                    break
+            
+            # 비디오 ID들로 통계 정보 일괄 조회 (50개씩 배치 처리)
+            stats_map = {}
+            if video_ids:
+                # YouTube API v3 제한: videos().list()는 최대 50개 ID만 허용
+                batch_size = 50
+                for i in range(0, len(video_ids), batch_size):
+                    batch_video_ids = video_ids[i:i + batch_size]
+                    
+                    stats_response = service.videos().list(
+                        part='statistics',
+                        id=','.join(batch_video_ids)
+                    ).execute()
+                    
+                    # 통계 정보를 맵에 추가
+                    for stats_item in stats_response.get('items', []):
+                        stats_map[stats_item['id']] = stats_item.get('statistics', {})
+                
+                for video in videos:
+                    video_id = video['video_id']
+                    if video_id in stats_map:
+                        stats = stats_map[video_id]
+                        video['statistics'] = {
+                            'view_count': int(stats.get('viewCount', 0)),
+                            'like_count': int(stats.get('likeCount', 0)),
+                            'comment_count': int(stats.get('commentCount', 0))
+                        }
             
             return {
                 'success': True,
                 'message': f'Retrieved {len(videos)} videos',
                 'data': {
                     'videos': videos,
-                    'total_results': playlist_response.get('pageInfo', {}).get('totalResults', 0),
-                    'next_page_token': playlist_response.get('nextPageToken')
+                    'total_results': len(videos),
+                    'next_page_token': current_page_token
                 }
             }
             
@@ -566,6 +615,261 @@ class YouTubeDataAPIService:
                 'message': f'Internal error: {str(e)}',
                 'data': None
             }
+
+    async def get_video_comments(
+        self, 
+        video_id: str, 
+        max_results: int = None,
+        order: str = 'time',
+        text_format: str = 'plainText'
+    ) -> Dict[str, Any]:
+        """
+        YouTube Data API v3를 사용해서 비디오의 댓글을 수집합니다.
+        
+        Args:
+            video_id: YouTube 비디오 ID
+            max_results: 수집할 최대 댓글 수 (None이면 제한 없음)
+            order: 정렬 순서 ('time', 'relevance')
+            text_format: 텍스트 형식 ('plainText', 'html')
+        
+        Returns:
+            댓글 데이터와 메타 정보
+        """
+        try:
+            service = self._get_service()
+            
+            all_comments = []
+            next_page_token = None
+            page_count = 0
+            total_quota_used = 0
+            
+            while True:
+                # API 요청 파라미터 설정
+                params = {
+                    'part': 'snippet,replies',
+                    'videoId': video_id,
+                    'maxResults': min(100, max_results - len(all_comments) if max_results else 100),
+                    'order': order,
+                    'textFormat': text_format
+                }
+                
+                if next_page_token:
+                    params['pageToken'] = next_page_token
+                
+                # API 호출 (quota cost: 1 unit)
+                request = service.commentThreads().list(**params)
+                response = request.execute()
+                total_quota_used += 1
+                page_count += 1
+                
+                logger.info(f"댓글 API 호출 {page_count}페이지: {len(response.get('items', []))}개 댓글 수집됨")
+                
+                # 댓글 데이터 처리
+                for item in response.get('items', []):
+                    comment_thread = self._process_comment_thread(item)
+                    all_comments.append(comment_thread)
+                    
+                    # 대댓글 처리 개선
+                    reply_count = comment_thread.get('reply_count', 0)
+                    if reply_count > 0:
+                        # API 응답에 포함된 대댓글 처리 (최대 5개)
+                        if 'replies' in item and item['replies'].get('comments'):
+                            for reply in item['replies']['comments']:
+                                reply_data = self._process_reply_comment(reply, comment_thread['comment_id'])
+                                all_comments.append(reply_data)
+                        
+                        # 더 많은 대댓글이 있는 경우 추가로 가져오기
+                        if reply_count > 5:
+                            try:
+                                additional_replies = await self._get_additional_replies(
+                                    comment_thread['comment_id'], 
+                                    max_replies=min(50, reply_count)  # 최대 50개까지
+                                )
+                                all_comments.extend(additional_replies)
+                            except Exception as e:
+                                logger.warning(f"대댓글 추가 수집 실패 (댓글 ID: {comment_thread['comment_id']}): {str(e)}")
+                
+                # 다음 페이지 토큰 확인
+                next_page_token = response.get('nextPageToken')
+                
+                # 종료 조건 확인
+                if not next_page_token:
+                    logger.info("더 이상 댓글이 없습니다.")
+                    break
+                    
+                if max_results and len(all_comments) >= max_results:
+                    logger.info(f"목표 댓글 수 {max_results}개에 도달했습니다.")
+                    break
+                    
+                # API 호출 간격 (rate limiting 방지)
+                import asyncio
+                await asyncio.sleep(0.1)
+            
+            # 최종 결과 정리
+            if max_results:
+                all_comments = all_comments[:max_results]
+            
+            return {
+                'success': True,
+                'message': f'댓글 수집 완료: {len(all_comments)}개',
+                'video_id': video_id,
+                'total_comments': len(all_comments),
+                'comments': all_comments,
+                'metadata': {
+                    'pages_fetched': page_count,
+                    'quota_used': total_quota_used,
+                    'order': order,
+                    'text_format': text_format
+                }
+            }
+            
+        except HttpError as e:
+            logger.error(f"YouTube API HTTP Error: {str(e)}")
+            error_message = "Unknown API error"
+            
+            if e.resp.status == 403:
+                if "quotaExceeded" in str(e):
+                    error_message = "API 할당량이 초과되었습니다."
+                elif "commentsDisabled" in str(e):
+                    error_message = "이 비디오는 댓글이 비활성화되어 있습니다."
+                else:
+                    error_message = "API 키가 유효하지 않거나 권한이 없습니다."
+            elif e.resp.status == 404:
+                error_message = "비디오를 찾을 수 없습니다."
+            else:
+                error_message = f"API 오류: {e.error_details[0]['message'] if e.error_details else str(e)}"
+            
+            return {
+                'success': False,
+                'message': error_message,
+                'video_id': video_id,
+                'total_comments': 0,
+                'comments': [],
+                'error_code': e.resp.status if hasattr(e, 'resp') else None
+            }
+            
+        except Exception as e:
+            logger.error(f"댓글 수집 중 오류 발생: {str(e)}")
+            return {
+                'success': False,
+                'message': f'내부 오류: {str(e)}',
+                'video_id': video_id,
+                'total_comments': 0,
+                'comments': []
+            }
+    
+    def _process_comment_thread(self, comment_thread_item: Dict) -> Dict[str, Any]:
+        """댓글 스레드 데이터를 처리합니다."""
+        snippet = comment_thread_item.get('snippet', {})
+        top_level_comment = snippet.get('topLevelComment', {}).get('snippet', {})
+        
+        return {
+            'comment_id': comment_thread_item.get('id'),
+            'text': top_level_comment.get('textDisplay', ''),
+            'text_original': top_level_comment.get('textOriginal', ''),
+            'author': top_level_comment.get('authorDisplayName', ''),
+            'author_id': top_level_comment.get('authorChannelId', {}).get('value', ''),
+            'author_profile_image': top_level_comment.get('authorProfileImageUrl', ''),
+            'author_channel_url': top_level_comment.get('authorChannelUrl', ''),
+            'like_count': int(top_level_comment.get('likeCount', 0)),
+            'published_at': top_level_comment.get('publishedAt', ''),
+            'updated_at': top_level_comment.get('updatedAt', ''),
+            'reply_count': int(snippet.get('totalReplyCount', 0)),
+            'is_reply': False,
+            'parent_id': None,
+            'video_id': top_level_comment.get('videoId', ''),
+            'can_reply': snippet.get('canReply', True),
+            'moderation_status': top_level_comment.get('moderationStatus', ''),
+            'timestamp': top_level_comment.get('publishedAt', ''),
+            'raw_data': comment_thread_item
+        }
+    
+    def _process_reply_comment(self, reply_item: Dict, parent_id: str) -> Dict[str, Any]:
+        """대댓글 데이터를 처리합니다."""
+        snippet = reply_item.get('snippet', {})
+        
+        return {
+            'comment_id': reply_item.get('id'),
+            'text': snippet.get('textDisplay', ''),
+            'text_original': snippet.get('textOriginal', ''),
+            'author': snippet.get('authorDisplayName', ''),
+            'author_id': snippet.get('authorChannelId', {}).get('value', ''),
+            'author_profile_image': snippet.get('authorProfileImageUrl', ''),
+            'author_channel_url': snippet.get('authorChannelUrl', ''),
+            'like_count': int(snippet.get('likeCount', 0)),
+            'published_at': snippet.get('publishedAt', ''),
+            'updated_at': snippet.get('updatedAt', ''),
+            'reply_count': 0,  # 대댓글은 답글이 없음
+            'is_reply': True,
+            'parent_id': parent_id,
+            'video_id': snippet.get('videoId', ''),
+            'can_reply': False,  # 대댓글에는 답글 불가
+            'moderation_status': snippet.get('moderationStatus', ''),
+            'timestamp': snippet.get('publishedAt', ''),
+            'raw_data': reply_item
+        }
+    
+    async def _get_additional_replies(self, parent_comment_id: str, max_replies: int = 50) -> List[Dict[str, Any]]:
+        """댓글 스레드의 추가 대댓글을 가져옵니다."""
+        try:
+            service = self._get_service()
+            all_replies = []
+            next_page_token = None
+            
+            while len(all_replies) < max_replies:
+                params = {
+                    'part': 'snippet',
+                    'parentId': parent_comment_id,
+                    'maxResults': min(100, max_replies - len(all_replies)),
+                    'textFormat': 'plainText'
+                }
+                
+                if next_page_token:
+                    params['pageToken'] = next_page_token
+                
+                request = service.comments().list(**params)
+                response = request.execute()
+                
+                for reply_item in response.get('items', []):
+                    reply_data = self._process_reply_comment(reply_item, parent_comment_id)
+                    all_replies.append(reply_data)
+                
+                next_page_token = response.get('nextPageToken')
+                if not next_page_token:
+                    break
+                    
+                # API 호출 간격
+                import asyncio
+                await asyncio.sleep(0.1)
+            
+            logger.info(f"댓글 {parent_comment_id}의 추가 대댓글 {len(all_replies)}개 수집됨")
+            return all_replies
+            
+        except Exception as e:
+            logger.error(f"추가 대댓글 수집 실패: {str(e)}")
+            return []
+
+    def _extract_video_id_from_url(self, url: str) -> Optional[str]:
+        """YouTube URL에서 비디오 ID를 추출합니다."""
+        import re
+        
+        # 이미 비디오 ID인 경우
+        if len(url) == 11 and url.isalnum():
+            return url
+            
+        # YouTube URL 패턴들
+        patterns = [
+            r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:embed\/)([0-9A-Za-z_-]{11})',
+            r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+                
+        return None
 
     async def test_api_connection(self) -> Dict[str, Any]:
         """API 연결을 테스트합니다."""

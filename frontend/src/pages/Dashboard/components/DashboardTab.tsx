@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Button, 
@@ -8,14 +8,20 @@ import {
   Col, 
   Avatar,
   Tag,
-  Input
+  Input,
+  Statistic,
+  Alert,
+  Tooltip
 } from 'antd';
 import { 
   SearchOutlined, 
   UserOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  DollarOutlined,
+  LockOutlined
 } from '@ant-design/icons';
 import type { ChannelInfo } from '../../../types/api';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -53,6 +59,41 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
   seoAnalysisLoading,
   competitorAnalysisLoading
 }) => {
+  const { isAuthenticated, accessToken } = useAuth();
+  const [revenueData, setRevenueData] = useState<any>(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+
+  // 수익 데이터 조회
+  const fetchRevenueData = async () => {
+    if (!isAuthenticated || !accessToken || !channelData?.channel_id) return;
+    
+    setRevenueLoading(true);
+    try {
+      const response = await fetch(`/api/v1/auth/analytics/summary?channel_id=${channelData.channel_id}&days=30`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setRevenueData(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('수익 데이터 조회 실패:', error);
+    } finally {
+      setRevenueLoading(false);
+    }
+  };
+
+  // 채널 데이터가 변경될 때 수익 데이터 조회
+  useEffect(() => {
+    if (channelData && isAuthenticated) {
+      fetchRevenueData();
+    }
+  }, [channelData, isAuthenticated]);
   return (
     <div style={{ 
       minHeight: '100vh',
@@ -346,6 +387,117 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
                 </Col>
               </Row>
+
+              {/* Revenue Section (Login Required) */}
+              {isAuthenticated ? (
+                revenueData ? (
+                  <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                    <Col span={24}>
+                      <Alert
+                        message="💰 수익 정보 (최근 30일)"
+                        type="success"
+                        showIcon
+                        style={{ marginBottom: '16px' }}
+                      />
+                    </Col>
+                    <Col xs={12} sm={6} lg={3}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #2ECC71, #27AE60)',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        textAlign: 'center',
+                        color: 'white',
+                        boxShadow: '0 8px 24px rgba(46, 204, 113, 0.3)'
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>💰</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '4px' }}>
+                          ${revenueData.estimated_revenue.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>총 수익</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} sm={6} lg={3}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #3498DB, #2980B9)',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        textAlign: 'center',
+                        color: 'white',
+                        boxShadow: '0 8px 24px rgba(52, 152, 219, 0.3)'
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📈</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '4px' }}>
+                          {revenueData.views.toLocaleString()}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>최근 조회수</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} sm={6} lg={3}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #E74C3C, #C0392B)',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        textAlign: 'center',
+                        color: 'white',
+                        boxShadow: '0 8px 24px rgba(231, 76, 60, 0.3)'
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>⏰</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '4px' }}>
+                          {revenueData.watch_time_hours.toLocaleString()}h
+                        </div>
+                        <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>시청 시간</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} sm={6} lg={3}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #9B59B6, #8E44AD)',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        textAlign: 'center',
+                        color: 'white',
+                        boxShadow: '0 8px 24px rgba(155, 89, 182, 0.3)'
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔄</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '4px' }}>
+                          {revenueData.net_subscribers > 0 ? '+' : ''}{revenueData.net_subscribers}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>구독자 증감</div>
+                      </div>
+                    </Col>
+                  </Row>
+                ) : revenueLoading ? (
+                  <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                    <Col span={24}>
+                      <Alert
+                        message="💰 수익 정보를 불러오는 중..."
+                        type="info"
+                        showIcon
+                      />
+                    </Col>
+                  </Row>
+                ) : null
+              ) : (
+                <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                  <Col span={24}>
+                    <Alert
+                      message={
+                        <div>
+                          <LockOutlined style={{ marginRight: '8px' }} />
+                          수익 정보를 보려면 Google 계정으로 로그인해주세요
+                        </div>
+                      }
+                      description="로그인하면 채널의 수익, 시청시간, 구독자 증감 등 상세한 분석 데이터를 확인할 수 있습니다."
+                      type="warning"
+                      showIcon
+                      action={
+                        <Button size="small" type="primary">
+                          로그인
+                        </Button>
+                      }
+                    />
+                  </Col>
+                </Row>
+              )}
 
               {/* Additional Info Cards */}
               <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>

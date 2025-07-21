@@ -33,7 +33,8 @@ class YouTubeOAuthService:
             'https://www.googleapis.com/auth/userinfo.profile', 
             'openid',
             'https://www.googleapis.com/auth/youtube.readonly',
-            'https://www.googleapis.com/auth/youtube.force-ssl'
+            'https://www.googleapis.com/auth/youtube.force-ssl',
+            'https://www.googleapis.com/auth/yt-analytics.readonly'  # 수익 데이터 조회용
         ]
         
         # OAuth 플로우 설정

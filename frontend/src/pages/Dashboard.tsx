@@ -9,8 +9,7 @@ import { useChannelInfo, useChannelVideos, useAppState, useCommentAnalysis } fro
 import type { SEOAnalysisData, CompetitorAnalysisData } from '../types/api';
 import { SEOAPI, CompetitorAPI } from '../services/api';
 
-// Components
-import ProtectedRoute from '../components/ProtectedRoute';
+// Components (ProtectedRoute 제거 - 개별 기능별로 권한 체크)
 
 // Tab Components
 import DashboardTab from './Dashboard/components/DashboardTab';
@@ -406,16 +405,14 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <ProtectedRoute>
-      <div>
-        <Tabs 
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={tabItems}
-          size="large"
-        />
-      </div>
-    </ProtectedRoute>
+    <div>
+      <Tabs 
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={tabItems}
+        size="large"
+      />
+    </div>
   );
 };
 

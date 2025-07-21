@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Card,
   Row,
@@ -19,6 +20,7 @@ import {
   Divider,
   Modal,
   notification,
+  Tooltip,
 } from 'antd';
 import {
   WarningOutlined,
@@ -46,6 +48,7 @@ const CommentAnalysisResultComponent: React.FC<CommentAnalysisResultProps> = ({
   onDeleteComments,
   loading = false,
 }) => {
+  const { isAuthenticated, user } = useAuth();
   const [selectedCommentIds, setSelectedCommentIds] = useState<string[]>([]);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [previewGroup, setPreviewGroup] = useState<DuplicateGroup | null>(null);
@@ -320,16 +323,29 @@ const CommentAnalysisResultComponent: React.FC<CommentAnalysisResultProps> = ({
                 >
                   전체 해제
                 </Button>
-                <Button
-                  type="primary"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={handleDeleteSelected}
-                  disabled={selectedCommentIds.length === 0}
-                  loading={loading}
-                >
-                  선택 삭제 ({selectedCommentIds.length})
-                </Button>
+                {isAuthenticated ? (
+                  <Button
+                    type="primary"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={handleDeleteSelected}
+                    disabled={selectedCommentIds.length === 0}
+                    loading={loading}
+                  >
+                    선택 삭제 ({selectedCommentIds.length})
+                  </Button>
+                ) : (
+                  <Tooltip title="댓글 삭제를 위해 Google 계정으로 로그인이 필요합니다">
+                    <Button
+                      type="primary"
+                      danger
+                      icon={<DeleteOutlined />}
+                      disabled
+                    >
+                      선택 삭제 (로그인 필요)
+                    </Button>
+                  </Tooltip>
+                )}
               </Space>
             </Space>
           </Card>
@@ -478,7 +494,11 @@ const CommentAnalysisResultComponent: React.FC<CommentAnalysisResultProps> = ({
                 <p>• <strong>완전 중복:</strong> 동일한 텍스트의 댓글들</p>
                 <p>• <strong>유사 그룹:</strong> 비슷한 패턴의 댓글들</p>
                 <p>• <strong>의심 사용자:</strong> 다수의 스팸 댓글을 작성한 사용자</p>
-                <p>• 댓글을 선택한 후 '선택 삭제' 버튼을 클릭하여 일괄 삭제할 수 있습니다</p>
+                {isAuthenticated ? (
+                  <p>• 댓글을 선택한 후 '선택 삭제' 버튼을 클릭하여 일괄 삭제할 수 있습니다</p>
+                ) : (
+                  <p>• 댓글 삭제 기능을 사용하려면 Google 계정으로 로그인해주세요</p>
+                )}
               </div>
             }
             type="info"

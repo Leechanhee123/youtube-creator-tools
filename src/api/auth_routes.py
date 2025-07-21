@@ -10,6 +10,7 @@ from ..models.auth_models import (
     ChannelAccessResponse, AuthError
 )
 from ..services.oauth_service import YouTubeOAuthService
+from ..services.youtube_analytics_service import YouTubeAnalyticsService
 
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
@@ -18,6 +19,11 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 def get_oauth_service() -> YouTubeOAuthService:
     """OAuth 서비스 의존성 주입"""
     return YouTubeOAuthService()
+
+
+def get_analytics_service() -> YouTubeAnalyticsService:
+    """Analytics 서비스 의존성 주입"""
+    return YouTubeAnalyticsService()
 
 
 def get_access_token(authorization: Optional[str] = Header(None)) -> str:
@@ -199,3 +205,58 @@ async def logout(
             "success": True,
             "message": "로그아웃되었습니다."
         }
+
+
+@router.get("/analytics/revenue")
+async def get_channel_revenue(
+    channel_id: str,
+    days: int = 30,
+    access_token: str = Depends(get_access_token),
+    analytics_service: YouTubeAnalyticsService = Depends(get_analytics_service)
+):
+    """
+    채널 수익 정보 조회 (로그인 필요)
+    
+    로그인한 사용자의 채널 수익 데이터를 조회합니다.
+    """
+    try:
+        result = await analytics_service.get_channel_revenue(
+            access_token=access_token,
+            channel_id=channel_id
+        )
+        
+        if not result['success']:
+            raise HTTPException(status_code=400, detail=result['message'])
+            
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/summary")
+async def get_analytics_summary(
+    channel_id: str,
+    days: int = 30,
+    access_token: str = Depends(get_access_token),
+    analytics_service: YouTubeAnalyticsService = Depends(get_analytics_service)
+):
+    """
+    채널 분석 요약 정보 조회 (로그인 필요)
+    
+    조회수, 시청시간, 구독자, 수익 등 종합 분석 데이터를 조회합니다.
+    """
+    try:
+        result = await analytics_service.get_channel_analytics_summary(
+            access_token=access_token,
+            channel_id=channel_id,
+            days=days
+        )
+        
+        if not result['success']:
+            raise HTTPException(status_code=400, detail=result['message'])
+            
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
