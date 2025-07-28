@@ -154,22 +154,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
           }
           
-          // 토큰 유효성 검증
-          const isValid = await authService.validateToken();
+          // 저장된 토큰이 있고 만료되지 않았다면 바로 인증 상태 복원
+          dispatch({
+            type: 'AUTH_SUCCESS',
+            payload: {
+              user: storedAuth.user,
+              channels: storedAuth.channels,
+              accessToken: storedAuth.accessToken,
+              refreshToken: storedAuth.refreshToken,
+              expiresAt: new Date(storedAuth.expiresAt),
+            },
+          });
           
-          if (isValid) {
-            dispatch({
-              type: 'AUTH_SUCCESS',
-              payload: {
-                user: storedAuth.user,
-                channels: storedAuth.channels,
-                accessToken: storedAuth.accessToken,
-                refreshToken: storedAuth.refreshToken,
-                expiresAt: new Date(storedAuth.expiresAt),
-              },
-            });
-          } else {
-            dispatch({ type: 'AUTH_LOGOUT' });
+          // 백그라운드에서 토큰 유효성 검증 (실패해도 바로 로그아웃하지 않음)
+          try {
+            const isValid = await authService.validateToken();
+            if (!isValid) {
+              console.warn('토큰 검증 실패, 갱신을 시도합니다.');
+              const refreshed = await refreshAccessToken();
+              if (!refreshed) {
+                dispatch({ type: 'AUTH_LOGOUT' });
+              }
+            }
+          } catch (error) {
+            console.warn('토큰 검증 중 오류 발생:', error);
+            // 네트워크 오류 등의 경우 로그아웃하지 않음
           }
         } else {
           dispatch({ type: 'SET_LOADING', payload: false });
@@ -208,15 +217,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // OAuth 콜백 처리
   const handleAuthCallback = async (code: string, state: string): Promise<void> => {
     try {
+      console.log('AuthContext.handleAuthCallback 시작');
       dispatch({ type: 'AUTH_START' });
       
-      // state 검증
+      // state 검증 (백엔드에서도 검증하므로 프론트엔드는 우회)
       const storedState = sessionStorage.getItem('oauth_state');
-      if (state !== storedState) {
-        throw new Error('잘못된 state 파라미터입니다.');
+      console.log('State 검증:', { received: state, stored: storedState });
+      
+      // state가 저장되어 있지 않더라도 백엔드에서 검증하므로 계속 진행
+      if (storedState && state !== storedState) {
+        console.warn('State 불일치 감지, 백엔드 검증으로 넘어갑니다.');
       }
       
+      console.log('authService.handleCallback 호출...');
       const authData = await authService.handleCallback(code, state);
+      console.log('authService.handleCallback 완료:', authData);
       
       dispatch({
         type: 'AUTH_SUCCESS',

@@ -22,6 +22,7 @@ export const useChannelInfo = () => {
 
   return {
     getChannelInfo: getChannelInfo.mutate,
+    getChannelInfoAsync: getChannelInfo.mutateAsync,
     isLoading: getChannelInfo.isPending,
     error: getChannelInfo.error,
     data: getChannelInfo.data,

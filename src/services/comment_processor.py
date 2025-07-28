@@ -4,6 +4,7 @@ import hashlib
 from collections import defaultdict, Counter
 from difflib import SequenceMatcher
 import logging
+from .url_spam_detector import URLSpamDetector
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ class CommentProcessor:
     def __init__(self):
         self.similarity_threshold = 0.8  # 유사도 임계값
         self.min_duplicate_count = 3    # 최소 중복 개수
+        self.url_spam_detector = URLSpamDetector()  # URL 스팸 탐지기
         
     def preprocess_text(self, text: str) -> str:
         """텍스트 전처리 (정규화)"""
@@ -107,7 +109,9 @@ class CommentProcessor:
             'common_phrases': [],
             'short_repetitive': 0,
             'emoji_spam': 0,
-            'link_spam': 0
+            'link_spam': 0,
+            'url_spam': 0,
+            'url_spam_details': []
         }
         
         # 1. 완전 중복 댓글 분석
@@ -118,14 +122,8 @@ class CommentProcessor:
         similar_groups = self.detect_similar_duplicates(comments)
         patterns['similar_groups'] = len(similar_groups)
         
-        # 3. 의심스러운 작성자 분석 (동일 사용자가 많은 댓글 작성)
-        author_counts = Counter(comment['author'] for comment in comments)
-        suspicious_threshold = max(3, len(comments) * 0.1)  # 전체의 10% 또는 최소 3개
-        patterns['suspicious_authors'] = [
-            {'author': author, 'count': count}
-            for author, count in author_counts.most_common(10)
-            if count >= suspicious_threshold
-        ]
+        # 3. 의심스러운 작성자 분석 제거 (한 사람이 여러 댓글 다는 건 자연스러운 현상)
+        patterns['suspicious_authors'] = []
         
         # 4. 짧고 반복적인 댓글 (3글자 이하)
         patterns['short_repetitive'] = sum(
@@ -157,7 +155,128 @@ class CommentProcessor:
             if count >= 5 and len(word) > 2
         ]
         
+        # 8. URL 스팸 분석 - 통합 처리
+        url_spam_comments = []
+        url_spam_by_id = {}  # 중복 방지용
+        
+        for comment in comments:
+            comment_id = comment['comment_id']
+            
+            # 이미 처리된 댓글은 스킵
+            if comment_id in url_spam_by_id:
+                continue
+                
+            url_analysis = self.url_spam_detector.analyze_comment(
+                comment['text'], 
+                comment['author']
+            )
+            
+            # URL 분석 결과를 댓글에 저장 (나중에 재사용)
+            comment['_url_analysis'] = url_analysis
+            
+            if url_analysis.get('is_spam', False):
+                patterns['url_spam'] += 1
+                
+                # URL 스팸 상세 정보 구성
+                url_spam_detail = {
+                    'comment_id': comment_id,
+                    'author': comment['author'],
+                    'text': comment['text'][:100] + '...' if len(comment['text']) > 100 else comment['text'],
+                    'spam_confidence': url_analysis.get('spam_confidence', 0),
+                    'detected_categories': url_analysis.get('risk_analysis', {}).get('detected_categories', []),
+                    'urls': url_analysis.get('urls', []),
+                    'youtube_info': url_analysis.get('youtube_info', []),
+                    'is_reply': comment.get('is_reply', False),
+                    'parent_id': comment.get('parent_id', None),
+                    'like_count': comment.get('like_count', 0),
+                    'timestamp': comment.get('timestamp', '')
+                }
+                
+                url_spam_comments.append(url_spam_detail)
+                url_spam_by_id[comment_id] = url_spam_detail
+                
+                # 디버깅을 위한 로그 추가
+                logger.info(f"URL 스팸 탐지: {comment['author']} - {url_analysis.get('spam_confidence', 0)}% 확신")
+        
+        patterns['url_spam_details'] = url_spam_comments
+        
+        # 9. 대댓글 매크로 패턴 분석 (새로 추가)
+        reply_patterns = self._analyze_reply_patterns(comments)
+        patterns.update(reply_patterns)
+        
         return patterns
+    
+    def _analyze_reply_patterns(self, comments: List[Dict]) -> Dict:
+        """대댓글 매크로 패턴 분석"""
+        reply_patterns = {
+            'reply_spam_count': 0,
+            'reply_spam_details': [],
+            'reply_chain_spam': 0,
+            'reply_duplicate_patterns': []
+        }
+        
+        # 대댓글만 필터링
+        replies = [comment for comment in comments if comment.get('is_reply', False)]
+        regular_comments = [comment for comment in comments if not comment.get('is_reply', False)]
+        
+        if not replies:
+            return reply_patterns
+        
+        # 1. 대댓글 체인 스팸 탐지 제거 (한 사람이 여러 대댓글 다는 건 자연스러운 현상)
+        reply_patterns['reply_chain_spam'] = 0
+        
+        # 2. 대댓글 중복 패턴 탐지
+        reply_duplicates = self.detect_exact_duplicates(replies)
+        reply_patterns['reply_duplicate_patterns'] = [
+            {
+                'text_sample': list(group)[0]['text'],
+                'duplicate_count': len(group),
+                'authors': list(set(comment['author'] for comment in group))
+            }
+            for group in reply_duplicates.values()
+        ]
+        
+        # 3. 대댓글 스팸 상세 분석 (댓글 개수 기반 판정 제거)
+        reply_spam_details = []
+        for reply in replies:
+            spam_score = 0
+            spam_indicators = []
+            
+            # 매우 짧은 대댓글 (1-2글자)
+            if len(self.preprocess_text(reply['text'])) <= 2:
+                spam_score += 3
+                spam_indicators.append('very_short')
+            
+            # 대댓글에서 URL 스팸 체크
+            url_analysis = self.url_spam_detector.analyze_comment(reply['text'], reply['author'])
+            if url_analysis.get('is_spam', False):
+                spam_score += 6
+                spam_indicators.append('url_spam')
+            
+            # 대댓글에서 일반 댓글과 유사한 내용 반복
+            for regular_comment in regular_comments:
+                if self.calculate_similarity(reply['text'], regular_comment['text']) > 0.8:
+                    spam_score += 5
+                    spam_indicators.append('similar_to_main_comment')
+                    break
+            
+            # 임계값을 높여서 더 확실한 스팸만 탐지 (URL 스팸이 있거나 중복 내용일 때만)
+            if spam_score >= 5:
+                reply_patterns['reply_spam_count'] += 1
+                reply_spam_details.append({
+                    'comment_id': reply['comment_id'],
+                    'author': reply['author'],
+                    'text': reply['text'][:100] + '...' if len(reply['text']) > 100 else reply['text'],
+                    'parent_id': reply.get('parent_id'),
+                    'spam_score': spam_score,
+                    'spam_indicators': spam_indicators,
+                    'like_count': reply.get('like_count', 0),
+                    'timestamp': reply.get('timestamp', '')
+                })
+        
+        reply_patterns['reply_spam_details'] = reply_spam_details
+        
+        return reply_patterns
     
     def get_duplicate_groups(self, comments: List[Dict]) -> Dict:
         """중복 댓글 그룹핑 결과 반환"""
@@ -214,6 +333,20 @@ class CommentProcessor:
             for comment in group:
                 suspicious_ids.add(comment['comment_id'])
         
+        # URL 스팸 댓글 ID 수집 (새로 추가)
+        for comment in comments:
+            url_analysis = self.url_spam_detector.analyze_comment(
+                comment['text'], 
+                comment['author']
+            )
+            if url_analysis.get('is_spam', False):
+                suspicious_ids.add(comment['comment_id'])
+        
+        # 대댓글 스팸 ID 수집 (새로 추가)
+        spam_patterns = self.analyze_spam_patterns(comments)
+        for reply_spam in spam_patterns.get('reply_spam_details', []):
+            suspicious_ids.add(reply_spam['comment_id'])
+        
         return list(suspicious_ids)
     
     def process_comments(self, comments: List[Dict]) -> Dict:
@@ -240,11 +373,11 @@ class CommentProcessor:
             'processing_summary': {
                 'exact_duplicate_groups': duplicate_groups['exact_duplicates']['count'],
                 'similar_groups': duplicate_groups['similar_groups']['count'],
-                'suspicious_authors': len(spam_patterns['suspicious_authors']),
                 'spam_indicators': {
                     'short_repetitive': spam_patterns['short_repetitive'],
                     'emoji_only': spam_patterns['emoji_spam'],
-                    'contains_links': spam_patterns['link_spam']
+                    'contains_links': spam_patterns['link_spam'],
+                    'url_spam': spam_patterns['url_spam']
                 }
             }
         }

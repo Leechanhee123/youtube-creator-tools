@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.routes import router
 from src.api.auth_routes import router as auth_router
+from src.api.test_routes import router as test_router
+from src.api.seo_routes import router as seo_router
 from src.core.config import settings
 import logging
 
@@ -24,6 +26,7 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router)
+app.include_router(seo_router)
 
 @app.get("/")
 async def root():

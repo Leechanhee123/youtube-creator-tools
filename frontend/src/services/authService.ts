@@ -224,8 +224,8 @@ class AuthService {
     const expiresAt = new Date(authData.expiresAt);
     const now = new Date();
     
-    // 5분 여유를 두고 만료 확인
-    return now.getTime() + 5 * 60 * 1000 >= expiresAt.getTime();
+    // 10분 여유를 두고 만료 확인 (더 안전한 마진)
+    return now.getTime() + 10 * 60 * 1000 >= expiresAt.getTime();
   }
 
   /**

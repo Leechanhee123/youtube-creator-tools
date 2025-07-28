@@ -1,13 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Tabs, notification } from 'antd';
+import { Tabs, App } from 'antd';
 import { 
   BarChartOutlined,
   PlayCircleOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useChannelInfo, useChannelVideos, useAppState, useCommentAnalysis } from '../hooks/useYouTubeData';
 import type { SEOAnalysisData, CompetitorAnalysisData } from '../types/api';
-import { SEOAPI, CompetitorAPI } from '../services/api';
+import { CompetitorAPI } from '../services/api';
 
 // Components (ProtectedRoute 제거 - 개별 기능별로 권한 체크)
 
@@ -17,21 +20,49 @@ import VideosTab from './Dashboard/components/VideosTab';
 import AnalysisTab from './Dashboard/components/AnalysisTab';
 import SEOTab from './Dashboard/components/SEOTab';
 import CompetitorTab from './Dashboard/components/CompetitorTab';
+import ChannelManagementTab from './Dashboard/components/ChannelManagementTab';
 
 const Dashboard: React.FC = () => {
+  const { t } = useLanguage();
+  const { isAuthenticated, user, channels } = useAuth();
+  const { notification } = App.useApp();
+  
+  // URL에서 채널 ID 파라미터 읽기
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialChannelId = urlParams.get('channel_id');
+  
   const [channelUrl, setChannelUrl] = useState('');
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(initialChannelId);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [hasAutoAnalyzed, setHasAutoAnalyzed] = useState(false);
+  
+  // 채널 ID가 변경될 때마다 URL 업데이트
+  useEffect(() => {
+    if (selectedChannelId) {
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('channel_id', selectedChannelId);
+      window.history.pushState({}, '', newUrl.toString());
+    } else {
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('channel_id');
+      window.history.pushState({}, '', newUrl.toString());
+    }
+  }, [selectedChannelId]);
   const [analysisSettings, setAnalysisSettings] = useState({
-    download_limit: 50 as number | undefined, // Render 서버 제한을 위해 기본값 설정
+    download_limit: 0 as number | undefined, // 댓글 분석용 기본값 (0이면 전체)
     similarity_threshold: 0.8,
     min_duplicate_count: 3,
   });
   
-  const { getChannelInfo, isLoading: channelLoading, data: channelData, error: channelError } = useChannelInfo();
+  const { getChannelInfo, getChannelInfoAsync, isLoading: channelLoading, data: channelData, error: channelError } = useChannelInfo();
   const { videos, isLoading: videosLoading, error: videosError, totalResults } = useChannelVideos(selectedChannelId);
   const { updateChannelInfo, updateChannelVideos, setActiveTab: setAppActiveTab } = useAppState();
-  const { analyzeVideo, isLoading: analysisLoading, data: analysisData, error: analysisError } = useCommentAnalysis();
+  const { analyzeVideo, isLoading: analysisLoading, data: analysisData, error: analysisError, reset: resetAnalysis } = useCommentAnalysis();
+
+  // 분석 데이터 상태 디버깅
+  React.useEffect(() => {
+    console.log('analysisData 상태 변경:', analysisData);
+  }, [analysisData]);
   
   // SEO 분석 상태
   const [seoAnalysisData, setSeoAnalysisData] = useState<SEOAnalysisData | null>(null);
@@ -54,26 +85,84 @@ const Dashboard: React.FC = () => {
     }
     
     try {
-      await getChannelInfo({ url: channelUrl.trim() });
+      await getChannelInfoAsync({ url: channelUrl.trim() });
     } catch (error) {
       console.error('Channel analysis error:', error);
     }
-  }, [channelUrl, getChannelInfo]);
+  }, [channelUrl, getChannelInfoAsync]);
+
+  // URL에서 채널 ID가 있는 경우 자동 분석 시작
+  useEffect(() => {
+    if (initialChannelId && !channelData && !hasAutoAnalyzed) {
+      const channelUrl = `https://www.youtube.com/channel/${initialChannelId}`;
+      setChannelUrl(channelUrl);
+      
+      getChannelInfoAsync({ url: channelUrl }).then(() => {
+        setHasAutoAnalyzed(true);
+        notification.success({
+          message: '채널 분석 완료',
+          description: 'URL 파라미터의 채널이 자동으로 분석되었습니다.',
+        });
+      }).catch((error) => {
+        console.error('URL 채널 분석 실패:', error);
+        notification.error({
+          message: '채널 분석 실패',
+          description: '채널 분석을 수동으로 시작해주세요.',
+        });
+      });
+    }
+  }, [initialChannelId, channelData, hasAutoAnalyzed, getChannelInfoAsync]);
+
+  // 로그인한 사용자의 채널 자동 분석 (URL 파라미터가 없는 경우에만)
+  useEffect(() => {
+    if (isAuthenticated && channels && channels.length > 0 && !hasAutoAnalyzed && !channelData && !initialChannelId) {
+      const firstChannel = channels[0];
+      // 채널 URL 형식으로 변환
+      const channelUrl = `https://www.youtube.com/channel/${firstChannel.channel_id}`;
+      setChannelUrl(channelUrl);
+      
+      // 로그인한 사용자는 채널 관리 탭으로 이동
+      setActiveTab('management');
+      setAppActiveTab('management');
+      
+      // 자동 분석 시작
+      getChannelInfoAsync({ url: channelUrl }).then(() => {
+        setHasAutoAnalyzed(true);
+        notification.success({
+          message: '자동 채널 분석 완료',
+          description: `${firstChannel.title} 채널이 자동으로 분석되었습니다.`,
+        });
+      }).catch((error) => {
+        console.error('자동 채널 분석 실패:', error);
+        notification.error({
+          message: '자동 채널 분석 실패',
+          description: '채널 분석을 수동으로 시작해주세요.',
+        });
+      });
+    }
+  }, [isAuthenticated, channels, hasAutoAnalyzed, channelData, getChannelInfoAsync, setAppActiveTab, initialChannelId]);
 
   // 채널 데이터 업데이트 시 처리
   useEffect(() => {
     if (channelData) {
       updateChannelInfo(channelData);
       setSelectedChannelId(channelData.channel_id);
-      setActiveTab('videos');
-      setAppActiveTab('videos');
       
-      notification.success({
-        message: '채널 분석 완료',
-        description: `${channelData.title} 채널 정보를 성공적으로 가져왔습니다.`,
-      });
+      // 로그인한 사용자가 아닌 경우에만 비디오 탭으로 이동
+      if (!isAuthenticated) {
+        setActiveTab('videos');
+        setAppActiveTab('videos');
+      }
+      
+      // 자동 분석이 아닌 경우에만 알림 표시
+      if (!hasAutoAnalyzed) {
+        notification.success({
+          message: '채널 분석 완료',
+          description: `${channelData.title} 채널 정보를 성공적으로 가져왔습니다.`,
+        });
+      }
     }
-  }, [channelData, updateChannelInfo, setAppActiveTab]);
+  }, [channelData, updateChannelInfo, setAppActiveTab, hasAutoAnalyzed, isAuthenticated]);
 
   // 비디오 데이터 업데이트 시 처리
   useEffect(() => {
@@ -122,6 +211,18 @@ const Dashboard: React.FC = () => {
       description: '댓글 삭제 기능은 OAuth 2.0 인증 구현 후 제공됩니다.',
     });
   }, []);
+
+  // 분석 리셋 핸들러
+  const handleResetAnalysis = useCallback(() => {
+    console.log('분석 리셋 요청됨. 현재 analysisData:', analysisData);
+    resetAnalysis();
+    console.log('resetAnalysis 함수 호출됨');
+    
+    // 리셋 후 상태 확인을 위한 타이머
+    setTimeout(() => {
+      console.log('리셋 후 analysisData 상태:', analysisData);
+    }, 100);
+  }, [resetAnalysis, analysisData]);
 
   // 분석 결과 처리
   useEffect(() => {
@@ -211,20 +312,34 @@ const Dashboard: React.FC = () => {
     setAppActiveTab('dashboard');
   };
 
-  // 완전 초기화 함수
-  const resetToInitialState = () => {
+  // 완전 초기화 함수 (로그인 상태 및 채널 관리 탭 유지)
+  const resetToInitialState = useCallback(() => {
     setChannelUrl('');
     setSelectedChannelId(null);
     setSeoAnalysisData(null);
     setCompetitorAnalysisData(null);
     setCompetitorUrls(['']);
+    setHasAutoAnalyzed(false); // 자동 분석 상태 초기화
+    
+    // 새로 시작 시 모든 사용자가 대시보드 탭으로 이동
     setActiveTab('dashboard');
     setAppActiveTab('dashboard');
-    // 채널 데이터도 초기화 (타입 호환성을 위해 undefined 사용)
+    
+    // URL 파라미터 초기화
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete('channel_id');
+    window.history.pushState({}, '', newUrl.toString());
+    
     // 채널 데이터 초기화
-    // updateChannelInfo(null);
-    // updateChannelVideos([]);
-  };
+    updateChannelInfo(null);
+    updateChannelVideos([]);
+    
+    // 성공 알림
+    notification.success({
+      message: '초기화 완료',
+      description: '새로운 채널 분석을 시작할 수 있습니다.',
+    });
+  }, [isAuthenticated, setAppActiveTab, updateChannelInfo, updateChannelVideos]);
 
   // 경쟁사 분석 핸들러
   const handleCompetitorAnalysis = useCallback(async () => {
@@ -300,7 +415,7 @@ const Dashboard: React.FC = () => {
       label: (
         <span>
           <BarChartOutlined />
-          대시보드
+          {t('nav.dashboard')}
         </span>
       ),
       children: (
@@ -327,7 +442,7 @@ const Dashboard: React.FC = () => {
       label: (
         <span>
           <PlayCircleOutlined />
-          비디오 목록
+          {t('nav.videos')}
         </span>
       ),
       children: (
@@ -345,7 +460,7 @@ const Dashboard: React.FC = () => {
       label: (
         <span>
           <BarChartOutlined />
-          댓글 분석
+          {t('nav.analysis')}
         </span>
       ),
       children: (
@@ -357,6 +472,7 @@ const Dashboard: React.FC = () => {
           setAnalysisSettings={setAnalysisSettings}
           onVideoAnalysis={handleVideoAnalysis}
           onDeleteComments={handleDeleteComments}
+          onResetAnalysis={handleResetAnalysis}
         />
       ),
     },
@@ -365,7 +481,7 @@ const Dashboard: React.FC = () => {
       label: (
         <span>
           <TrophyOutlined />
-          SEO 분석
+          {t('nav.seo')}
         </span>
       ),
       children: (
@@ -385,7 +501,7 @@ const Dashboard: React.FC = () => {
       label: (
         <span>
           <TrophyOutlined />
-          경쟁사 분석
+          {t('nav.competitor')}
         </span>
       ),
       children: (
@@ -402,16 +518,47 @@ const Dashboard: React.FC = () => {
         />
       ),
     },
+    {
+      key: 'management',
+      label: (
+        <span>
+          <SettingOutlined />
+          {t('nav.management')}
+        </span>
+      ),
+      children: (
+        <ChannelManagementTab
+          channelData={channelData || null}
+          onChannelAnalysis={handleChannelAnalysis}
+          channelLoading={channelLoading}
+        />
+      ),
+    },
   ];
 
   return (
-    <div>
-      <Tabs 
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={tabItems}
-        size="large"
-      />
+    <div className="full-width-container">
+      <div className="main-content-full">
+        <Tabs 
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={tabItems}
+          size="large"
+          className="full-width-tabs modern-tabs"
+          style={{
+            background: 'transparent',
+            width: '100%',
+          }}
+          tabBarStyle={{
+            marginBottom: '24px',
+            borderRadius: '12px',
+            background: 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(10px)',
+            padding: '8px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+          }}
+        />
+      </div>
     </div>
   );
 };

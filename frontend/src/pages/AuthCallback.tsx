@@ -31,6 +31,8 @@ const AuthCallback: React.FC = () => {
         const state = searchParams.get('state');
         const error = searchParams.get('error');
 
+        console.log('OAuth 콜백 파라미터:', { code: code?.substring(0, 20) + '...', state, error });
+
         // OAuth 에러 확인
         if (error) {
           throw new Error(`OAuth 인증 취소: ${error}`);
@@ -41,8 +43,12 @@ const AuthCallback: React.FC = () => {
           throw new Error('잘못된 OAuth 콜백 파라미터입니다.');
         }
 
+        console.log('handleAuthCallback 호출 시작...');
+        
         // 인증 처리
         await handleAuthCallback(code, state);
+        
+        console.log('handleAuthCallback 완료!');
         
         // 성공 시 대시보드로 리다이렉트
         setTimeout(() => {

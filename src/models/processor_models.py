@@ -32,6 +32,34 @@ class CommonPhrase(BaseModel):
     phrase: str = Field(..., description="자주 등장하는 구문")
     count: int = Field(..., description="등장 횟수")
 
+class URLSpamDetail(BaseModel):
+    comment_id: str = Field(..., description="댓글 ID")
+    author: str = Field(..., description="작성자")
+    text: str = Field(..., description="댓글 내용")
+    spam_confidence: int = Field(..., description="스팸 확신도")
+    detected_categories: List[str] = Field(..., description="탐지된 카테고리")
+    urls: List[Dict[str, Any]] = Field(..., description="탐지된 URL 정보")
+    youtube_info: List[Dict[str, Any]] = Field(..., description="YouTube 관련 정보")
+    is_reply: bool = Field(..., description="대댓글 여부")
+    parent_id: Optional[str] = Field(None, description="부모 댓글 ID")
+    like_count: int = Field(..., description="좋아요 수")
+    timestamp: str = Field(..., description="작성 시간")
+
+class ReplySpamDetail(BaseModel):
+    comment_id: str = Field(..., description="댓글 ID")
+    author: str = Field(..., description="작성자")
+    text: str = Field(..., description="댓글 내용")
+    parent_id: Optional[str] = Field(None, description="부모 댓글 ID")
+    spam_score: int = Field(..., description="스팸 점수")
+    spam_indicators: List[str] = Field(..., description="스팸 지표")
+    like_count: int = Field(..., description="좋아요 수")
+    timestamp: str = Field(..., description="작성 시간")
+
+class ReplyDuplicatePattern(BaseModel):
+    text_sample: str = Field(..., description="대표 텍스트")
+    duplicate_count: int = Field(..., description="중복 개수")
+    authors: List[str] = Field(..., description="작성자 목록")
+
 class SpamPatterns(BaseModel):
     exact_duplicates: int = Field(..., description="완전 중복 그룹 수")
     similar_groups: int = Field(..., description="유사 그룹 수")
@@ -40,11 +68,16 @@ class SpamPatterns(BaseModel):
     short_repetitive: int = Field(..., description="짧고 반복적인 댓글 수")
     emoji_spam: int = Field(..., description="이모지만 있는 댓글 수")
     link_spam: int = Field(..., description="링크 포함 댓글 수")
+    url_spam: int = Field(..., description="URL 스팸 댓글 수")
+    url_spam_details: List[URLSpamDetail] = Field(..., description="URL 스팸 댓글 상세 정보")
+    reply_spam_count: int = Field(..., description="대댓글 스팸 수")
+    reply_spam_details: List[ReplySpamDetail] = Field(..., description="대댓글 스팸 상세 정보")
+    reply_chain_spam: int = Field(..., description="대댓글 체인 스팸 수")
+    reply_duplicate_patterns: List[ReplyDuplicatePattern] = Field(..., description="대댓글 중복 패턴")
 
 class ProcessingSummary(BaseModel):
     exact_duplicate_groups: int = Field(..., description="완전 중복 그룹 수")
     similar_groups: int = Field(..., description="유사 그룹 수")
-    suspicious_authors: int = Field(..., description="의심스러운 작성자 수")
     spam_indicators: Dict[str, int] = Field(..., description="스팸 지표들")
 
 class CommentProcessResponse(BaseModel):

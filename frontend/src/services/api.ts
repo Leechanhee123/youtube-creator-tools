@@ -62,14 +62,28 @@ export class ProcessorAPI {
   }
 }
 
-// SEO 분석 API 서비스
-export class SEOAPI {
-  static async analyzeChannelSEO(data: {
+
+// Backlinko SEO 분석 API 서비스 (단순화됨)
+export class BacklinkoSEOAPI {
+  // Backlinko 기반 SEO 분석
+  static async analyzeChannel(data: {
     channel_id: string;
-    percentile_threshold?: number;
-    min_videos?: number;
-  }): Promise<{ success: boolean; data?: SEOAnalysisData; message: string }> {
+    force_channel_type?: string;
+    max_videos?: number;
+  }): Promise<{ success: boolean; data?: any; message: string }> {
     const response = await apiClient.post('/api/v1/seo/analyze', data);
+    return response.data;
+  }
+
+  // SEO 설정 가져오기
+  static async getConfig(): Promise<{ success: boolean; data?: any; message: string }> {
+    const response = await apiClient.get('/api/v1/seo/config');
+    return response.data;
+  }
+
+  // 채널 타입별 벤치마크
+  static async getBenchmarks(channelType: string): Promise<{ success: boolean; data?: any; message: string }> {
+    const response = await apiClient.get(`/api/v1/seo/benchmarks/${channelType}`);
     return response.data;
   }
 }
@@ -86,6 +100,35 @@ export class CompetitorAPI {
       competitor_urls: competitorUrls,
       analysis_period: period
     });
+    return response.data;
+  }
+}
+
+// 성과 분석 API 서비스
+export class PerformanceAPI {
+  static async getComprehensiveAnalysis(data: ChannelInfoRequest & {
+    analysis_type?: string;
+    analysis_value?: number;
+  }): Promise<{
+    success: boolean;
+    data?: {
+      channel_info: any;
+      performance_analysis: {
+        comprehensive_score: number;
+        metrics: {
+          recent_performance: any;
+          subscription_rate: any;
+          content_consistency: any;
+          engagement_rate: any;
+        };
+        analysis_period: string;
+        videos_analyzed: number;
+        last_updated: string;
+      };
+    };
+    message: string;
+  }> {
+    const response = await apiClient.post('/api/v1/performance/comprehensive-analysis', data);
     return response.data;
   }
 }

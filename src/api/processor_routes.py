@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from src.services.youtube_downloader import YouTubeCommentDownloaderService
+from src.services.youtube_data_api import YouTubeDataAPIService
 from src.services.comment_processor import CommentProcessor
 from src.models.processor_models import (
     CommentProcessRequest,
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/processor", tags=["Comment Processor"])
 
 # 서비스 인스턴스
-downloader_service = YouTubeCommentDownloaderService()
+youtube_service = YouTubeDataAPIService()
 processor = CommentProcessor()
 
 @router.post("/analyze-video", response_model=CommentProcessResponse)
@@ -32,7 +32,7 @@ async def analyze_video_comments(request: CommentProcessRequest):
     """
     try:
         # 비디오 ID 추출
-        video_id = downloader_service._extract_video_id(request.video_url)
+        video_id = youtube_service._extract_video_id_from_url(request.video_url)
         if not video_id:
             raise ValueError("Invalid YouTube URL or video ID")
         
@@ -44,10 +44,15 @@ async def analyze_video_comments(request: CommentProcessRequest):
         
         # 댓글 다운로드
         logger.info(f"Downloading comments for video: {video_id}")
-        comments = await downloader_service.download_comments(
-            video_url=request.video_url,
-            limit=request.download_limit
+        comment_result = await youtube_service.get_video_comments(
+            video_id=video_id,
+            max_results=request.download_limit
         )
+        
+        if not comment_result.get('success'):
+            raise ValueError(comment_result.get('message', 'Failed to download comments'))
+        
+        comments = comment_result.get('comments', [])
         
         if not comments:
             return CommentProcessResponse(
@@ -67,14 +72,19 @@ async def analyze_video_comments(request: CommentProcessRequest):
                     common_phrases=[],
                     short_repetitive=0,
                     emoji_spam=0,
-                    link_spam=0
+                    link_spam=0,
+                    url_spam=0,
+                    url_spam_details=[],
+                    reply_spam_count=0,
+                    reply_spam_details=[],
+                    reply_chain_spam=0,
+                    reply_duplicate_patterns=[]
                 ),
                 suspicious_comment_ids=[],
                 processing_summary=ProcessingSummary(
                     exact_duplicate_groups=0,
                     similar_groups=0,
-                    suspicious_authors=0,
-                    spam_indicators={'short_repetitive': 0, 'emoji_only': 0, 'contains_links': 0}
+                    spam_indicators={'short_repetitive': 0, 'emoji_only': 0, 'contains_links': 0, 'url_spam': 0}
                 )
             )
         

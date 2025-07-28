@@ -72,6 +72,51 @@ export interface DuplicateGroup {
   authors: string[];
 }
 
+// URL 스팸 상세 정보 타입
+export interface URLSpamDetail {
+  comment_id: string;
+  author: string;
+  text: string;
+  spam_confidence: number;
+  detected_categories: string[];
+  urls: Array<{
+    url: string;
+    start: number;
+    end: number;
+    pattern_type: string;
+  }>;
+  youtube_info: Array<{
+    full_match: string;
+    identifier: string;
+    type: string;
+    start: number;
+    end: number;
+  }>;
+  is_reply: boolean;
+  parent_id: string | null;
+  like_count: number;
+  timestamp: string;
+}
+
+// 대댓글 스팸 상세 정보 타입
+export interface ReplySpamDetail {
+  comment_id: string;
+  author: string;
+  text: string;
+  parent_id: string | null;
+  spam_score: number;
+  spam_indicators: string[];
+  like_count: number;
+  timestamp: string;
+}
+
+// 대댓글 중복 패턴 타입
+export interface ReplyDuplicatePattern {
+  text_sample: string;
+  duplicate_count: number;
+  authors: string[];
+}
+
 // 댓글 분석 결과 타입
 export interface CommentAnalysisResult {
   video_id: string;
@@ -97,6 +142,12 @@ export interface CommentAnalysisResult {
     short_repetitive: number;
     emoji_spam: number;
     link_spam: number;
+    url_spam: number;
+    url_spam_details: URLSpamDetail[];
+    reply_spam_count: number;
+    reply_spam_details: ReplySpamDetail[];
+    reply_chain_spam: number;
+    reply_duplicate_patterns: ReplyDuplicatePattern[];
   };
   suspicious_comment_ids: string[];
   processing_summary: {
@@ -107,7 +158,108 @@ export interface CommentAnalysisResult {
       short_repetitive: number;
       emoji_only: number;
       contains_links: number;
+      url_spam: number;
     };
+  };
+}
+
+// 고급 SEO 분석 결과 타입
+export interface AdvancedSEOAnalysisData {
+  total_videos: number;
+  channel_type: string;
+  overall_seo_score: number;
+  top_performers: {
+    count: number;
+    avg_score: number;
+    videos: Array<{
+      video_id: string;
+      title: string;
+      seo_score: number;
+      video_data: any;
+    }>;
+  };
+  bottom_performers: {
+    count: number;
+    avg_score: number;
+    videos: Array<{
+      video_id: string;
+      title: string;
+      seo_score: number;
+      video_data: any;
+    }>;
+  };
+  analysis: {
+    title_optimization: any;
+    description_quality: any;
+    engagement_signals: any;
+    metadata_optimization: any;
+  };
+  score_distribution: any;
+  recommendations: Array<{
+    category: string;
+    type: string;
+    priority: 'high' | 'medium' | 'low';
+    suggestion: string;
+    impact: 'high' | 'medium' | 'low';
+    backlinko_principle?: string;
+    actionable_steps?: string[];
+  }>;
+  benchmarks: any;
+  analysis_method: string;
+  seo_factors_weights: {
+    title_optimization: number;
+    description_quality: number;
+    engagement_signals: number;
+    video_quality: number;
+    metadata_optimization: number;
+  };
+}
+
+// SEO 설정 타입
+export interface SEOConfig {
+  enabled: boolean;
+  keyword_patterns: {
+    korean: {
+      attention_grabbing: string[];
+      question_words: string[];
+      trending_words: string[];
+      emotional_words: string[];
+      shorts_specific: string[];
+    };
+    english: {
+      attention_grabbing: string[];
+      question_words: string[];
+      trending_words: string[];
+      emotional_words: string[];
+      shorts_specific: string[];
+    };
+  };
+  channel_type_weights: {
+    [key: string]: {
+      attention_grabbing: number;
+      question_words: number;
+      trending_words: number;
+      emotional_words: number;
+      shorts_specific: number;
+    };
+  };
+  engagement_weights: {
+    view_count: number;
+    like_rate: number;
+    comment_rate: number;
+  };
+  thresholds: {
+    percentile_threshold: number;
+    min_videos_required: number;
+    shorts_duration_threshold: number;
+    significant_keyword_diff: number;
+    significant_length_diff: number;
+    significant_desc_length_diff: number;
+  };
+  title_length_standards: {
+    shorts: { min_length: number; max_length: number; optimal_length: number };
+    regular: { min_length: number; max_length: number; optimal_length: number };
+    live: { min_length: number; max_length: number; optimal_length: number };
   };
 }
 
@@ -153,6 +305,7 @@ export interface KeywordUsage {
   question_words: number;
   trending_words: number;
   emotional_words: number;
+  shorts_specific: number;
 }
 
 export interface SpecialChars {
@@ -230,10 +383,12 @@ export interface SEORecommendation {
   priority: 'high' | 'medium' | 'low';
   suggestion: string;
   impact: 'high' | 'medium' | 'low';
+  actionable_steps?: string[];
 }
 
 export interface SEOAnalysisData {
   total_videos: number;
+  channel_type?: string;
   analysis_groups: {
     top_videos: {
       count: number;
@@ -244,9 +399,35 @@ export interface SEOAnalysisData {
       analysis: VideoGroupAnalysis;
     };
   };
+  video_types_analysis?: {
+    shorts: {
+      count: number;
+      avg_views: number;
+      avg_likes: number;
+      avg_comments: number;
+      engagement_rate: number;
+    };
+    regular: {
+      count: number;
+      avg_views: number;
+      avg_likes: number;
+      avg_comments: number;
+      engagement_rate: number;
+    };
+    live: {
+      count: number;
+      avg_views: number;
+      avg_likes: number;
+      avg_comments: number;
+      engagement_rate: number;
+    };
+  };
   comparison: GroupComparison;
   recommendations: SEORecommendation[];
   percentile_threshold: number;
+  adaptive_threshold?: number;
+  analysis_method?: string;
+  applied_weights?: Record<string, number>;
 }
 
 export interface SEOAnalysisResponse {

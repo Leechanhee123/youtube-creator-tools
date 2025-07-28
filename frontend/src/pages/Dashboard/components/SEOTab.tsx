@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Button, 
@@ -6,16 +6,25 @@ import {
   Row, 
   Col, 
   Alert,
-  Spin
+  Spin,
+  Select,
+  Space,
+  Switch,
+  Tooltip,
+  Divider
 } from 'antd';
 import { 
   TrophyOutlined, 
-  ArrowLeftOutlined 
+  ArrowLeftOutlined,
+  RocketOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 import type { SEOAnalysisData } from '../../../types/api';
 import SEOAnalysisResultComponent from '../../../components/SEOAnalysisResult';
+import useAdvancedSEO from '../../../hooks/useAdvancedSEO';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 interface SEOTabProps {
   selectedChannelId: string | null;
@@ -36,6 +45,65 @@ const SEOTab: React.FC<SEOTabProps> = ({
   onSEOAnalysis,
   onGoBack
 }) => {
+  // 고급 SEO 분석 상태
+  const {
+    isLoading: advancedLoading,
+    data: advancedData,
+    error: advancedError,
+    config,
+    configLoading,
+    analyzeAdvanced,
+    getBenchmarks,
+    loadConfig,
+    reset: resetAdvanced
+  } = useAdvancedSEO();
+
+  // UI 상태
+  const [analysisMode, setAnalysisMode] = useState<'basic' | 'advanced' | 'backlinko'>('backlinko');
+  const [selectedPreset, setSelectedPreset] = useState<string>('기본 설정');
+  const [selectedChannelType, setSelectedChannelType] = useState<string>('');
+
+  // 설정 데이터 로드
+  useEffect(() => {
+    if (selectedChannelId) {
+      loadConfig();
+    }
+  }, [selectedChannelId, loadConfig]);
+
+  // 고급 SEO 분석 실행
+  const handleAdvancedSEOAnalysis = async () => {
+    if (!selectedChannelId) return;
+
+    try {
+      if (analysisMode === 'backlinko') {
+        await analyzeAdvanced({
+          channelId: selectedChannelId,
+          forceChannelType: selectedChannelType || undefined,
+          maxVideos: 50,
+        });
+      } else {
+        await analyzeAdvanced({
+          channelId: selectedChannelId,
+          forceChannelType: selectedChannelType || undefined,
+          maxVideos: 50,
+        });
+      }
+    } catch (error) {
+      console.error('Advanced SEO analysis failed:', error);
+    }
+  };
+
+  // 분석 모드 변경
+  const handleAnalysisModeChange = (mode: 'basic' | 'advanced' | 'backlinko') => {
+    setAnalysisMode(mode);
+    resetAdvanced();
+  };
+
+  // 현재 로딩 상태
+  const isCurrentlyLoading = analysisMode === 'basic' ? seoAnalysisLoading : advancedLoading;
+  
+  // 현재 데이터
+  const currentData = analysisMode === 'basic' ? seoAnalysisData : advancedData;
   return (
     <div style={{
       minHeight: '100vh',
@@ -80,7 +148,7 @@ const SEOTab: React.FC<SEOTabProps> = ({
       </div>
 
       <div style={{ padding: '40px 5%' }}>
-        {seoAnalysisLoading ? (
+        {isCurrentlyLoading ? (
           <div style={{ 
             textAlign: 'center', 
             padding: '100px 0',
@@ -90,11 +158,18 @@ const SEOTab: React.FC<SEOTabProps> = ({
           }}>
             <Spin size="large" />
             <div style={{ marginTop: 24 }}>
-              <Title level={4}>SEO 분석 진행 중...</Title>
-              <Text type="secondary">채널의 모든 비디오를 분석하고 있습니다. 잠시만 기다려주세요.</Text>
+              <Title level={4}>
+                {analysisMode === 'backlinko' ? 'Backlinko 기반 SEO 분석 진행 중...' :
+                 analysisMode === 'advanced' ? '고급 SEO 분석 진행 중...' :
+                 'SEO 분석 진행 중...'}
+              </Title>
+              <Text type="secondary">
+                {analysisMode === 'backlinko' ? 'Backlinko 가이드 기준으로 채널을 분석하고 있습니다.' :
+                 '채널의 모든 비디오를 분석하고 있습니다. 잠시만 기다려주세요.'}
+              </Text>
             </div>
           </div>
-        ) : seoAnalysisData ? (
+        ) : currentData ? (
           <div style={{
             background: 'rgba(255,255,255,0.95)',
             borderRadius: '20px',
@@ -102,7 +177,11 @@ const SEOTab: React.FC<SEOTabProps> = ({
             backdropFilter: 'blur(20px)',
             boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
           }}>
-            <SEOAnalysisResultComponent data={seoAnalysisData} />
+            {analysisMode === 'basic' ? (
+              <SEOAnalysisResultComponent data={currentData} />
+            ) : (
+              <AdvancedSEOResult data={currentData} />
+            )}
           </div>
         ) : (
           <div style={{
@@ -122,6 +201,98 @@ const SEOTab: React.FC<SEOTabProps> = ({
               }}>
                 채널 SEO 분석
               </Title>
+              
+              {/* 분석 모드 선택 */}
+              <Card style={{ marginBottom: 24, textAlign: 'left' }}>
+                <Title level={4}>분석 방법 선택</Title>
+                <Row gutter={[16, 16]} align="middle">
+                  <Col span={8}>
+                    <Select
+                      value={analysisMode}
+                      onChange={handleAnalysisModeChange}
+                      style={{ width: '100%' }}
+                      size="large"
+                    >
+                      <Option value="backlinko">
+                        <Space>
+                          <RocketOutlined />
+                          Backlinko 기반 분석 (추천)
+                        </Space>
+                      </Option>
+                      <Option value="advanced">
+                        <Space>
+                          <ExperimentOutlined />
+                          고급 분석 (커스텀)
+                        </Space>
+                      </Option>
+                      <Option value="basic">
+                        <Space>
+                          <TrophyOutlined />
+                          기본 분석
+                        </Space>
+                      </Option>
+                    </Select>
+                  </Col>
+                  
+                  {analysisMode === 'backlinko' && (
+                    <Col span={6}>
+                      <Select
+                        value={selectedPreset}
+                        onChange={setSelectedPreset}
+                        style={{ width: '100%' }}
+                        placeholder="프리셋 선택"
+                        loading={configLoading}
+                      >
+                        {config.presets.map((preset: any, index: number) => (
+                          <Option key={preset.name || `preset-${index}`} value={preset.name}>
+                            <div>
+                              <Text strong>{preset.name}</Text>
+                              {preset.is_default && <span style={{ color: '#1890ff' }}> (기본)</span>}
+                            </div>
+                          </Option>
+                        ))}
+                      </Select>
+                    </Col>
+                  )}
+                  
+                  <Col span={6}>
+                    <Select
+                      value={selectedChannelType}
+                      onChange={setSelectedChannelType}
+                      style={{ width: '100%' }}
+                      placeholder="채널 타입 (자동 감지)"
+                      allowClear
+                      loading={configLoading}
+                    >
+                      {config.channelTypes.map((type: any, index: number) => (
+                        <Option key={type.value || `type-${index}`} value={type.value}>
+                          {type.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Col>
+                  
+                </Row>
+                
+                <Divider />
+                
+                <Alert
+                  message={
+                    analysisMode === 'backlinko' ? 'Backlinko 가이드 기반 SEO 분석' :
+                    analysisMode === 'advanced' ? '고급 커스텀 SEO 분석' :
+                    '기본 SEO 분석'
+                  }
+                  description={
+                    analysisMode === 'backlinko' ? 
+                      '업계 표준인 Backlinko 가이드를 기반으로 제목 최적화, 참여도 신호, 호기심 갭 등을 종합 분석합니다.' :
+                    analysisMode === 'advanced' ?
+                      '모든 분석 기준을 커스터마이징할 수 있는 고급 분석 모드입니다.' :
+                      '기본적인 SEO 요소들을 분석하여 개선점을 제안합니다.'
+                  }
+                  type="info"
+                  showIcon
+                />
+              </Card>
             </div>
             
             <Row gutter={[16, 16]}>
@@ -152,18 +323,28 @@ const SEOTab: React.FC<SEOTabProps> = ({
                     <Button
                       type="primary"
                       size="large"
-                      icon={<TrophyOutlined />}
-                      onClick={onSEOAnalysis}
-                      loading={seoAnalysisLoading}
+                      icon={
+                        analysisMode === 'backlinko' ? <RocketOutlined /> :
+                        analysisMode === 'advanced' ? <ExperimentOutlined /> :
+                        <TrophyOutlined />
+                      }
+                      onClick={analysisMode === 'basic' ? onSEOAnalysis : handleAdvancedSEOAnalysis}
+                      loading={isCurrentlyLoading}
                       style={{
-                        background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                        background: analysisMode === 'backlinko' ? 
+                          'linear-gradient(45deg, #52c41a, #73d13d)' :
+                          'linear-gradient(45deg, #667eea, #764ba2)',
                         border: 'none',
                         borderRadius: '12px',
                         fontWeight: 600,
-                        boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
+                        boxShadow: analysisMode === 'backlinko' ? 
+                          '0 4px 15px rgba(82, 196, 26, 0.3)' :
+                          '0 4px 15px rgba(102, 126, 234, 0.3)'
                       }}
                     >
-                      SEO 분석 시작
+                      {analysisMode === 'backlinko' ? 'Backlinko 분석 시작' :
+                       analysisMode === 'advanced' ? '고급 분석 시작' :
+                       'SEO 분석 시작'}
                     </Button>
                   </div>
                 )}

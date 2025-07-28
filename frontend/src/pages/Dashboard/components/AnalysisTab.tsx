@@ -16,7 +16,8 @@ import {
 } from 'antd';
 import { 
   BarChartOutlined, 
-  SettingOutlined 
+  SettingOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import type { VideoInfo, CommentAnalysisResult } from '../../../types/api';
 import CommentAnalysisResultComponent from '../../../components/CommentAnalysisResult';
@@ -40,6 +41,7 @@ interface AnalysisTabProps {
   }>>;
   onVideoAnalysis: (videoUrl: string) => void;
   onDeleteComments: (commentIds: string[]) => void;
+  onResetAnalysis: () => void;
 }
 
 const AnalysisTab: React.FC<AnalysisTabProps> = ({
@@ -49,8 +51,10 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({
   analysisSettings,
   setAnalysisSettings,
   onVideoAnalysis,
-  onDeleteComments
+  onDeleteComments,
+  onResetAnalysis
 }) => {
+
   const handleDirectAnalysis = (value: string) => {
     if (value.trim()) {
       onVideoAnalysis(value.trim());
@@ -62,9 +66,18 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({
     }
   };
 
+  const handleReset = () => {
+    console.log('리셋 함수 호출됨');
+    onResetAnalysis();
+    notification.success({
+      message: '분석 결과 초기화',
+      description: '새로운 분석을 시작할 수 있습니다.',
+    });
+  };
+
   if (analysisLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px 0' }}>
+      <div className="full-width-container" style={{ textAlign: 'center', padding: '50px 0', minHeight: '100vh' }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }}>
           <Text type="secondary">댓글을 분석중입니다...</Text>
@@ -75,16 +88,37 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({
 
   if (analysisData) {
     return (
-      <CommentAnalysisResultComponent
-        data={analysisData}
-        onDeleteComments={onDeleteComments}
-        loading={false}
-      />
+      <div className="full-width-container">
+        <div className="main-content-full">
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: '16px', fontWeight: 500 }}>댓글 분석 결과</Text>
+            <Button 
+              type="default" 
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                console.log('리셋 버튼 클릭됨');
+                if (window.confirm('현재 분석 결과를 지우고 새로운 분석을 시작하시겠습니까?')) {
+                  handleReset();
+                }
+              }}
+              size="middle"
+            >
+              새로운 분석
+            </Button>
+          </div>
+          <CommentAnalysisResultComponent
+            data={analysisData}
+            onDeleteComments={onDeleteComments}
+            loading={false}
+          />
+        </div>
+      </div>
     );
   }
 
   return (
-    <div>
+    <div className="full-width-container">
+      <div className="main-content-full">
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col span={24}>
           <Card title="🎥 비디오 URL로 직접 분석">
@@ -124,13 +158,13 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({
                             <Text strong>댓글 다운로드 수:</Text>
                             <br />
                             <InputNumber
-                              placeholder="전체 (비워두면 전체)"
+                              placeholder="전체 (0이면 전체)"
                               value={analysisSettings.download_limit}
                               onChange={(value) => setAnalysisSettings(prev => ({
                                 ...prev,
                                 download_limit: value || undefined
                               }))}
-                              min={1}
+                              min={0}
                               max={10000}
                               style={{ width: '100%' }}
                             />
@@ -246,6 +280,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({
           </Col>
         </Row>
       )}
+        </div>
     </div>
   );
 };

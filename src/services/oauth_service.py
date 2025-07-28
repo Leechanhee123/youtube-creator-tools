@@ -120,10 +120,22 @@ class YouTubeOAuthService:
         except Exception as e:
             raise Exception(f"사용자 정보 조회 실패: {str(e)}")
 
-    async def get_user_channels(self, access_token: str) -> List[UserChannel]:
+    async def get_user_channels(self, access_token: str, refresh_token: str = None) -> List[UserChannel]:
         """사용자의 YouTube 채널 목록 조회"""
         try:
-            credentials = Credentials(token=access_token)
+            # 토큰 갱신 정보를 포함한 Credentials 객체 생성
+            credentials = Credentials(
+                token=access_token,
+                refresh_token=refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # 토큰 갱신이 가능한 경우 자동으로 갱신 시도
+            if refresh_token:
+                credentials.refresh(Request())
+            
             youtube = build('youtube', 'v3', credentials=credentials)
             
             # 사용자의 채널 목록 조회
@@ -152,6 +164,8 @@ class YouTubeOAuthService:
             return channels
             
         except HttpError as e:
+            if e.resp.status == 401:
+                raise Exception(f"인증이 필요합니다. 다시 로그인해주세요.")
             raise Exception(f"채널 목록 조회 실패: {str(e)}")
         except Exception as e:
             raise Exception(f"채널 목록 조회 중 오류: {str(e)}")
@@ -222,7 +236,7 @@ class YouTubeOAuthService:
             user_info = await self.get_user_info(token_response.access_token)
             
             # 3. 사용자 채널 목록 조회
-            channels = await self.get_user_channels(token_response.access_token)
+            channels = await self.get_user_channels(token_response.access_token, token_response.refresh_token)
             
             # 4. 만료 시간 계산
             expires_at = datetime.utcnow() + timedelta(seconds=token_response.expires_in)

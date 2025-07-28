@@ -71,7 +71,7 @@ class YouTubeCommentDownloaderService:
                 processed_comment = self._process_comment(comment)
                 comments.append(processed_comment)
                 
-                if limit and len(comments) >= limit:
+                if limit is not None and limit > 0 and len(comments) >= limit:
                     break
                     
         except Exception as e:
